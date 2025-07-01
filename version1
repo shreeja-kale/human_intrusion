@@ -1,0 +1,125 @@
+import cv2
+import os
+import time
+import gc
+import tkinter as tk
+from tkinter import messagebox
+from PIL import Image, ImageTk
+import threading
+
+# --- Global paths ---
+output_folder = "D:/Human/"
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
+
+# --- Load MobileNet SSD ---
+prototxt_path = "mobilenet_ssd/MobileNetSSD_deploy.prototxt"
+model_path = "mobilenet_ssd/MobileNetSSD_deploy.caffemodel"
+net = cv2.dnn.readNetFromCaffe(prototxt_path, model_path)
+
+# --- Object classes ---
+CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
+           "bottle", "bus", "car", "cat", "chair",
+           "cow", "diningtable", "dog", "horse",
+           "motorbike", "person", "pottedplant", "sheep",
+           "sofa", "train", "tvmonitor"]
+
+# --- RTSP Camera ---
+cam = cv2.VideoCapture("rtsp://vmukti:vmukti%23907@192.168.1.88/1", cv2.CAP_FFMPEG)
+
+img_counter = 0
+capture_interval = 60  # seconds
+last_capture_time = time.time()
+
+
+def show_alert_popup(image_path):
+    def show_image():
+        # Close the alert popup
+        popup.destroy()
+
+        # Open image window
+        img_window = tk.Toplevel()
+        img_window.title("Detected Image")
+        img = Image.open(image_path)
+        img = img.resize((640, 360))
+        img = ImageTk.PhotoImage(img)
+        panel = tk.Label(img_window, image=img)
+        panel.image = img
+        panel.pack()
+
+        # Auto-close the image window after 30 seconds
+        img_window.after(30000, img_window.destroy)
+
+    root = tk.Tk()
+    root.withdraw()  # Hide root window
+
+    # Alert popup
+    popup = tk.Toplevel()
+    popup.title("Human Intrusion Alert!")
+    popup.geometry("300x150+500+300")
+    popup.attributes("-topmost", True)
+
+    label = tk.Label(popup, text="Human Intrusion Detected!", font=("Arial", 12, "bold"))
+    label.pack(pady=10)
+
+    show_button = tk.Button(popup, text="Show", command=show_image)
+    show_button.pack(pady=5)
+
+    ok_button = tk.Button(popup, text="OK", command=popup.destroy)
+    ok_button.pack(pady=5)
+
+    root.mainloop()
+
+# --- Main Loop ---
+while True:
+    ret, frame = cam.read()
+    if not ret:
+        print("Failed to grab frame")
+        break
+
+    frame = cv2.resize(frame, (960, 540))
+    cv2.imshow('Cargo monitoring titan project', frame)
+
+    current_time = time.time()
+    if current_time - last_capture_time >= capture_interval:
+        (h, w) = frame.shape[:2]
+        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)),0.007843, (300, 300), 127.5)
+        net.setInput(blob)
+        detections = net.forward()
+
+        found_human = False
+        for i in range(detections.shape[2]):
+            confidence = detections[0, 0, i, 2]
+            if confidence > 0.05:
+                idx = int(detections[0, 0, i, 1])
+                if CLASSES[idx] == "person":
+                    found_human = True
+                    box = detections[0, 0, i, 3:7] * [w, h, w, h]
+                    (startX, startY, endX, endY) = box.astype("int")
+                    if (endX - startX) > 50 and (endY - startY) > 50:
+                        cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
+                        label = f"Person: {confidence * 100:.2f}%"
+                        cv2.putText(frame, label, (startX, startY - 10),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        if found_human:
+            img_name = f"image_capture_{img_counter}.jpg"
+            save_path = os.path.join(output_folder, img_name)
+            cv2.imwrite(save_path, frame)
+            print(f"ALERT: Human detected. Image saved: {save_path}")
+            threading.Thread(target=show_alert_popup, args=(save_path,), daemon=True).start()
+            img_counter += 1
+        else:
+            print("No human detected.")
+
+        last_capture_time = current_time
+        del blob, detections
+        gc.collect()
+
+    # Press 'q' to exit
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# --- Cleanup ---
+cam.release()
+
