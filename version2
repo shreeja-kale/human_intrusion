@@ -1,0 +1,56 @@
+import cv2
+import time
+import gc
+
+# --- Load MobileNet SSD ---
+prototxt_path = "mobilenet_ssd/MobileNetSSD_deploy.prototxt"
+model_path = "mobilenet_ssd/MobileNetSSD_deploy.caffemodel"
+net = cv2.dnn.readNetFromCaffe(prototxt_path, model_path)
+
+# --- Object classes ---
+CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
+           "bottle", "bus", "car", "cat", "chair",
+           "cow", "diningtable", "dog", "horse",
+           "motorbike", "person", "pottedplant", "sheep",
+           "sofa", "train", "tvmonitor"]
+
+# --- RTSP Camera ---
+cam = cv2.VideoCapture("rtsp://vmukti:vmukti%23907@192.168.1.88/1", cv2.CAP_FFMPEG)
+
+capture_interval = 60  # seconds
+last_capture_time = time.time()
+
+# --- Main Loop ---
+while True:
+    ret, frame = cam.read()
+    if not ret:
+        print("Failed to grab frame")
+        break
+
+    current_time = time.time()
+    if current_time - last_capture_time >= capture_interval:
+        (h, w) = frame.shape[:2]
+        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
+        net.setInput(blob)
+        detections = net.forward()
+
+        found_human = False
+        for i in range(detections.shape[2]):
+            confidence = detections[0, 0, i, 2]
+            if confidence > 0.05:
+                idx = int(detections[0, 0, i, 1])
+                if CLASSES[idx] == "person":
+                    found_human = True
+                    break  # No need to check further
+
+        if found_human:
+            print("ALERT: Human detected.")
+        else:
+            print("No human detected.")
+
+        last_capture_time = current_time
+        del blob, detections
+        gc.collect()
+
+# --- Cleanup ---
+cam.release()
