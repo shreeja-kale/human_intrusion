@@ -35,6 +35,7 @@ last_capture_time = time.time()
 popup_queue = Queue()
 
 def show_popup(frame):
+    cv2.destroyAllWindows()  # Close OpenCV window first
     root = tk.Tk()
     root.withdraw()
 
@@ -54,9 +55,12 @@ def show_popup(frame):
     label.image = photo
     label.pack()
 
-    # Auto-close after 30 seconds
-    popup.after(30000, popup.destroy)
+    # Auto-close after 30 seconds and resume OpenCV view
+    def close_popup():
+        popup.destroy()
+        root.quit()
 
+    popup.after(30000, close_popup)
     root.mainloop()
 
 # --- Main Loop ---
@@ -70,8 +74,9 @@ while True:
         cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         continue
 
-    frame = cv2.resize(frame, (960, 540))
-    cv2.imshow('🔍 Cargo Monitoring', frame)
+    if popup_queue.empty():  # Only show OpenCV if popup is not showing
+        frame = cv2.resize(frame, (960, 540))
+        cv2.imshow('🔍 Cargo Monitoring', frame)
 
     current_time = time.time()
     if current_time - last_capture_time >= capture_interval:
@@ -96,7 +101,7 @@ while True:
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         if found_human:
-            print(f"[✅] Human detected. Popup queued.")
+            print(f"[✅] Human detected. Pausing OpenCV and showing popup.")
             popup_queue.put(frame.copy())
             img_counter += 1
         else:
