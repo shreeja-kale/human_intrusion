@@ -4,7 +4,6 @@ import time
 import gc
 import tkinter as tk
 from PIL import Image, ImageTk
-from queue import Queue
 
 # --- Global Paths ---
 output_folder = "/home/root/human_images/"
@@ -27,15 +26,16 @@ RTSP_URL = "rtsp://vmukti:vmukti%23907@192.168.1.88/1"
 cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
 cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-img_counter = 0
 capture_interval = 60  # seconds
 last_capture_time = time.time()
 
-# --- Tkinter popup queue ---
-popup_queue = Queue()
-
+# --- GUI Popup Function ---
 def show_popup(frame):
-    cv2.destroyAllWindows()  # Close OpenCV window first
+    # Save temporary image to disk
+    temp_path = "/tmp/current_frame.jpg"
+    cv2.imwrite(temp_path, frame)
+
+    # Initialize GUI
     root = tk.Tk()
     root.withdraw()
 
@@ -44,9 +44,6 @@ def show_popup(frame):
     popup.geometry("700x400+400+200")
     popup.attributes("-topmost", True)
 
-    # Save and show the frame
-    temp_path = "/tmp/current_frame.jpg"
-    cv2.imwrite(temp_path, frame)
     image = Image.open(temp_path)
     image = image.resize((640, 360))
     photo = ImageTk.PhotoImage(image)
@@ -55,12 +52,7 @@ def show_popup(frame):
     label.image = photo
     label.pack()
 
-    # Auto-close after 30 seconds and resume OpenCV view
-    def close_popup():
-        popup.destroy()
-        root.quit()
-
-    popup.after(30000, close_popup)
+    popup.after(30000, lambda: (popup.destroy(), root.quit()))
     root.mainloop()
 
 # --- Main Loop ---
@@ -74,14 +66,11 @@ while True:
         cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         continue
 
-    if popup_queue.empty():  # Only show OpenCV if popup is not showing
-        frame = cv2.resize(frame, (960, 540))
-        cv2.imshow('🔍 Cargo Monitoring', frame)
-
     current_time = time.time()
     if current_time - last_capture_time >= capture_interval:
         (h, w) = frame.shape[:2]
-        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
+        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)),
+                                     0.007843, (300, 300), 127.5)
         net.setInput(blob)
         detections = net.forward()
 
@@ -92,18 +81,12 @@ while True:
                 idx = int(detections[0, 0, i, 1])
                 if CLASSES[idx] == "person":
                     found_human = True
-                    box = detections[0, 0, i, 3:7] * [w, h, w, h]
-                    (startX, startY, endX, endY) = box.astype("int")
-                    if (endX - startX) > 50 and (endY - startY) > 50:
-                        cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
-                        label = f"Person: {confidence * 100:.2f}%"
-                        cv2.putText(frame, label, (startX, startY - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    print(f"[✅] Human detected with {confidence:.2f} confidence.")
+                    break  # Break on first detection
 
         if found_human:
-            print(f"[✅] Human detected. Pausing OpenCV and showing popup.")
-            popup_queue.put(frame.copy())
-            img_counter += 1
+            show_popup(frame.copy())
+
         else:
             print("[ℹ️] No human detected.")
 
@@ -111,14 +94,8 @@ while True:
         del blob, detections
         gc.collect()
 
-    # Process popup in main thread
-    if not popup_queue.empty():
-        frame_to_show = popup_queue.get()
-        show_popup(frame_to_show)
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    # Optional: small sleep to avoid tight loop
+    time.sleep(0.1)
 
 # --- Cleanup ---
 cam.release()
-cv2.destroyAllWindows()
