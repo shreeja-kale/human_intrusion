@@ -4,10 +4,10 @@ import time
 import gc
 import tkinter as tk
 from PIL import Image, ImageTk
-import threading
+from queue import Queue
 
 # --- Global Paths ---
-output_folder = "/home/root/human_images/"  # Use Linux-compatible path
+output_folder = "/home/root/human_images/"
 os.makedirs(output_folder, exist_ok=True)
 
 # --- Load MobileNet SSD ---
@@ -22,7 +22,7 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
            "motorbike", "person", "pottedplant", "sheep",
            "sofa", "train", "tvmonitor"]
 
-# --- RTSP Camera Setup ---
+# --- RTSP Camera ---
 RTSP_URL = "rtsp://vmukti:vmukti%23907@192.168.1.88/1"
 cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
 cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -31,12 +31,10 @@ img_counter = 0
 capture_interval = 60  # seconds
 last_capture_time = time.time()
 
-# --- GUI Alert Window (Runs on thread) ---
-def show_popup(frame):
-    def close_after_30s(window):
-        time.sleep(30)
-        window.destroy()
+# --- Tkinter popup queue ---
+popup_queue = Queue()
 
+def show_popup(frame):
     root = tk.Tk()
     root.withdraw()
 
@@ -45,9 +43,10 @@ def show_popup(frame):
     popup.geometry("700x400+400+200")
     popup.attributes("-topmost", True)
 
-    # Convert OpenCV image to PIL format
-    cv2.imwrite("/tmp/current_frame.jpg", frame)
-    image = Image.open("/tmp/current_frame.jpg")
+    # Save and show the frame
+    temp_path = "/tmp/current_frame.jpg"
+    cv2.imwrite(temp_path, frame)
+    image = Image.open(temp_path)
     image = image.resize((640, 360))
     photo = ImageTk.PhotoImage(image)
 
@@ -55,14 +54,16 @@ def show_popup(frame):
     label.image = photo
     label.pack()
 
-    threading.Thread(target=close_after_30s, args=(popup,), daemon=True).start()
+    # Auto-close after 30 seconds
+    popup.after(30000, popup.destroy)
+
     root.mainloop()
 
 # --- Main Loop ---
 while True:
     ret, frame = cam.read()
     if not ret or frame is None:
-        print("[⚠️] Frame not received, reconnecting camera...")
+        print("[⚠️] Frame not received, reconnecting...")
         cam.release()
         time.sleep(2)
         cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
@@ -95,8 +96,8 @@ while True:
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         if found_human:
-            print(f"[✅] Human detected. Showing popup...")
-            threading.Thread(target=show_popup, args=(frame.copy(),), daemon=True).start()
+            print(f"[✅] Human detected. Popup queued.")
+            popup_queue.put(frame.copy())
             img_counter += 1
         else:
             print("[ℹ️] No human detected.")
@@ -104,6 +105,11 @@ while True:
         last_capture_time = current_time
         del blob, detections
         gc.collect()
+
+    # Process popup in main thread
+    if not popup_queue.empty():
+        frame_to_show = popup_queue.get()
+        show_popup(frame_to_show)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
