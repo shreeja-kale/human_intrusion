@@ -32,7 +32,7 @@ last_capture_time = time.time()
 while True:
     ret, frame = cam.read()
     if not ret or frame is None:
-        print("[⚠️] Frame not received, reconnecting...")
+        print("[⚠️] Frame not received. Reconnecting...")
         cam.release()
         time.sleep(2)
         cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
@@ -40,7 +40,7 @@ while True:
         continue
 
     frame = cv2.resize(frame, (960, 540))
-    cv2.imshow('🔍 Cargo Monitoring', frame)
+    cv2.imshow('📷 Cargo Monitoring', frame)
 
     current_time = time.time()
     if current_time - last_capture_time >= capture_interval:
@@ -65,12 +65,12 @@ while True:
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         if found_human:
-            print(f"[✅] Human detected. Showing OpenCV popup.")
-            img_name = f"alert_{img_counter}.jpg"
-            path = os.path.join(output_folder, img_name)
-            cv2.imwrite(path, frame)
+            print(f"[🚨] Human detected!")
+            img_name = f"human_capture_{img_counter}.jpg"
+            save_path = os.path.join(output_folder, img_name)
+            cv2.imwrite(save_path, frame)
 
-            # Show full-screen alert
+            # Show alert image fullscreen
             cv2.namedWindow("ALERT", cv2.WINDOW_NORMAL)
             cv2.setWindowProperty("ALERT", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
             cv2.imshow("ALERT", frame)
@@ -88,6 +88,5 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# --- Cleanup ---
 cam.release()
 cv2.destroyAllWindows()
