@@ -6,20 +6,23 @@ import tkinter as tk
 from PIL import Image, ImageTk
 import threading
 
-# --- Setup ---
-output_folder = "/home/root/human_images/"
+# --- Global Paths ---
+output_folder = "/home/root/human_images/"  # Use Linux-compatible path
 os.makedirs(output_folder, exist_ok=True)
 
+# --- Load MobileNet SSD ---
 prototxt_path = "mobilenet_ssd/MobileNetSSD_deploy.prototxt"
 model_path = "mobilenet_ssd/MobileNetSSD_deploy.caffemodel"
 net = cv2.dnn.readNetFromCaffe(prototxt_path, model_path)
 
+# --- Object Classes ---
 CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
            "bottle", "bus", "car", "cat", "chair",
            "cow", "diningtable", "dog", "horse",
            "motorbike", "person", "pottedplant", "sheep",
            "sofa", "train", "tvmonitor"]
 
+# --- RTSP Camera Setup ---
 RTSP_URL = "rtsp://vmukti:vmukti%23907@192.168.1.88/1"
 cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
 cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -28,33 +31,38 @@ img_counter = 0
 capture_interval = 60  # seconds
 last_capture_time = time.time()
 
-# --- Tkinter root initialized once ---
-root = tk.Tk()
-root.withdraw()  # Hide the root window
+# --- GUI Alert Window (Runs on thread) ---
+def show_popup(frame):
+    def close_after_30s(window):
+        time.sleep(30)
+        window.destroy()
 
-# --- Show Popup Function ---
-def show_popup_img(img):
+    root = tk.Tk()
+    root.withdraw()
+
     popup = tk.Toplevel()
-    popup.title("Human Intrusion Alert!")
+    popup.title("Human Intrusion Alert")
     popup.geometry("700x400+400+200")
     popup.attributes("-topmost", True)
 
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img_pil = Image.fromarray(img_rgb).resize((640, 360))
-    photo = ImageTk.PhotoImage(img_pil)
+    # Convert OpenCV image to PIL format
+    cv2.imwrite("/tmp/current_frame.jpg", frame)
+    image = Image.open("/tmp/current_frame.jpg")
+    image = image.resize((640, 360))
+    photo = ImageTk.PhotoImage(image)
 
-    panel = tk.Label(popup, image=photo)
-    panel.image = photo
-    panel.pack()
+    label = tk.Label(popup, image=photo)
+    label.image = photo
+    label.pack()
 
-    # Auto-close in 30 sec
-    popup.after(30000, popup.destroy)
+    threading.Thread(target=close_after_30s, args=(popup,), daemon=True).start()
+    root.mainloop()
 
 # --- Main Loop ---
 while True:
     ret, frame = cam.read()
     if not ret or frame is None:
-        print("[⚠️] Failed to grab frame. Reconnecting...")
+        print("[⚠️] Frame not received, reconnecting camera...")
         cam.release()
         time.sleep(2)
         cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
@@ -62,7 +70,7 @@ while True:
         continue
 
     frame = cv2.resize(frame, (960, 540))
-    cv2.imshow('Cargo Monitoring', frame)
+    cv2.imshow('🔍 Cargo Monitoring', frame)
 
     current_time = time.time()
     if current_time - last_capture_time >= capture_interval:
@@ -87,22 +95,11 @@ while True:
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         if found_human:
-            print("[✅] Human detected. Showing popup and closing main display.")
-            cv2.destroyAllWindows()  # Close OpenCV display immediately
-
-            # Show popup (in main thread, not child thread)
-            show_popup_img(frame.copy())
-
-            # Optional: reinitialize camera after popup
-            cam.release()
-            time.sleep(1)
-            cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
-            cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-            # reset timer and count
+            print(f"[✅] Human detected. Showing popup...")
+            threading.Thread(target=show_popup, args=(frame.copy(),), daemon=True).start()
             img_counter += 1
-            last_capture_time = current_time
-            continue
+        else:
+            print("[ℹ️] No human detected.")
 
         last_capture_time = current_time
         del blob, detections
