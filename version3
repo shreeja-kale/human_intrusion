@@ -2,8 +2,6 @@ import cv2
 import os
 import time
 import gc
-import tkinter as tk
-from PIL import Image, ImageTk
 
 # --- Global Paths ---
 output_folder = "/home/root/human_images/"
@@ -26,34 +24,9 @@ RTSP_URL = "rtsp://vmukti:vmukti%23907@192.168.1.88/1"
 cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
 cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
+img_counter = 0
 capture_interval = 60  # seconds
 last_capture_time = time.time()
-
-# --- GUI Popup Function ---
-def show_popup(frame):
-    # Save temporary image to disk
-    temp_path = "/tmp/current_frame.jpg"
-    cv2.imwrite(temp_path, frame)
-
-    # Initialize GUI
-    root = tk.Tk()
-    root.withdraw()
-
-    popup = tk.Toplevel()
-    popup.title("Human Intrusion Alert")
-    popup.geometry("700x400+400+200")
-    popup.attributes("-topmost", True)
-
-    image = Image.open(temp_path)
-    image = image.resize((640, 360))
-    photo = ImageTk.PhotoImage(image)
-
-    label = tk.Label(popup, image=photo)
-    label.image = photo
-    label.pack()
-
-    popup.after(30000, lambda: (popup.destroy(), root.quit()))
-    root.mainloop()
 
 # --- Main Loop ---
 while True:
@@ -66,11 +39,13 @@ while True:
         cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         continue
 
+    frame = cv2.resize(frame, (960, 540))
+    cv2.imshow('🔍 Cargo Monitoring', frame)
+
     current_time = time.time()
     if current_time - last_capture_time >= capture_interval:
         (h, w) = frame.shape[:2]
-        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)),
-                                     0.007843, (300, 300), 127.5)
+        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
         net.setInput(blob)
         detections = net.forward()
 
@@ -81,12 +56,28 @@ while True:
                 idx = int(detections[0, 0, i, 1])
                 if CLASSES[idx] == "person":
                     found_human = True
-                    print(f"[✅] Human detected with {confidence:.2f} confidence.")
-                    break  # Break on first detection
+                    box = detections[0, 0, i, 3:7] * [w, h, w, h]
+                    (startX, startY, endX, endY) = box.astype("int")
+                    if (endX - startX) > 50 and (endY - startY) > 50:
+                        cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
+                        label = f"Person: {confidence * 100:.2f}%"
+                        cv2.putText(frame, label, (startX, startY - 10),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         if found_human:
-            show_popup(frame.copy())
+            print(f"[✅] Human detected. Showing OpenCV popup.")
+            img_name = f"alert_{img_counter}.jpg"
+            path = os.path.join(output_folder, img_name)
+            cv2.imwrite(path, frame)
 
+            # Show full-screen alert
+            cv2.namedWindow("ALERT", cv2.WINDOW_NORMAL)
+            cv2.setWindowProperty("ALERT", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            cv2.imshow("ALERT", frame)
+            cv2.waitKey(30000)  # Show for 30 seconds
+            cv2.destroyWindow("ALERT")
+
+            img_counter += 1
         else:
             print("[ℹ️] No human detected.")
 
@@ -94,8 +85,9 @@ while True:
         del blob, detections
         gc.collect()
 
-    # Optional: small sleep to avoid tight loop
-    time.sleep(0.1)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
 # --- Cleanup ---
 cam.release()
+cv2.destroyAllWindows()
