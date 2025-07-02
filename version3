@@ -65,17 +65,36 @@ while True:
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         if found_human:
-            print(f"[🚨] Human detected!")
             img_name = f"human_capture_{img_counter}.jpg"
             save_path = os.path.join(output_folder, img_name)
             cv2.imwrite(save_path, frame)
+            print(f"[🚨] Human detected! Image saved: {save_path}")
 
-            # Show alert image fullscreen
-            cv2.namedWindow("ALERT", cv2.WINDOW_NORMAL)
-            cv2.setWindowProperty("ALERT", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-            cv2.imshow("ALERT", frame)
-            cv2.waitKey(30000)  # Show for 30 seconds
+            # Step 1: Show popup with "Human Detected" and wait for "s" key (show)
+            popup_img = frame.copy()
+            cv2.putText(popup_img, "🚨 Human Detected!", (20, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+            cv2.putText(popup_img, "Press 's' to SHOW image or wait 10 sec...", (20, 100),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+            cv2.imshow("ALERT", popup_img)
+            start = time.time()
+            key = -1
+            while (time.time() - start) < 10:
+                key = cv2.waitKey(1000)
+                if key == ord('s'):
+                    break
+
             cv2.destroyWindow("ALERT")
+
+            # Step 2: If user pressed 's', show full screen image
+            if key == ord('s'):
+                alert_img = cv2.imread(save_path)
+                cv2.namedWindow("HUMAN CAPTURE", cv2.WINDOW_NORMAL)
+                cv2.setWindowProperty("HUMAN CAPTURE", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+                cv2.imshow("HUMAN CAPTURE", alert_img)
+                cv2.waitKey(30000)
+                cv2.destroyWindow("HUMAN CAPTURE")
 
             img_counter += 1
         else:
@@ -88,5 +107,6 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+# --- Cleanup ---
 cam.release()
 cv2.destroyAllWindows()
