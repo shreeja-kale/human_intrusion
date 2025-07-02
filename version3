@@ -1,0 +1,110 @@
+import cv2
+import os
+import time
+import gc
+import tkinter as tk
+from PIL import Image, ImageTk
+import threading
+
+
+# --- Load MobileNet SSD ---
+prototxt_path = "mobilenet_ssd/MobileNetSSD_deploy.prototxt"
+model_path = "mobilenet_ssd/MobileNetSSD_deploy.caffemodel"
+net = cv2.dnn.readNetFromCaffe(prototxt_path, model_path)
+
+# --- Object Classes ---
+CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
+           "bottle", "bus", "car", "cat", "chair",
+           "cow", "diningtable", "dog", "horse",
+           "motorbike", "person", "pottedplant", "sheep",
+           "sofa", "train", "tvmonitor"]
+
+# --- RTSP Camera Setup ---
+RTSP_URL = "rtsp://vmukti:vmukti%23907@192.168.1.88/1"
+cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
+cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+img_counter = 0
+capture_interval = 60  # seconds
+last_capture_time = time.time()
+
+# --- GUI Alert Window (Runs on thread) ---
+def show_popup(frame):
+    def close_after_30s(window):
+        time.sleep(30)
+        window.destroy()
+
+    root = tk.Tk()
+    root.withdraw()
+
+    popup = tk.Toplevel()
+    popup.title("Human Intrusion Alert")
+    popup.geometry("700x400+400+200")
+    popup.attributes("-topmost", True)
+
+    # Convert OpenCV image to PIL format
+    cv2.imwrite("/tmp/current_frame.jpg", frame)
+    image = Image.open("/tmp/current_frame.jpg")
+    image = image.resize((640, 360))
+    photo = ImageTk.PhotoImage(image)
+
+    label = tk.Label(popup, image=photo)
+    label.image = photo
+    label.pack()
+
+    threading.Thread(target=close_after_30s, args=(popup,), daemon=True).start()
+    root.mainloop()
+
+# --- Main Loop ---
+while True:
+    ret, frame = cam.read()
+    if not ret or frame is None:
+        print("[⚠️] Frame not received, reconnecting camera...")
+        cam.release()
+        time.sleep(2)
+        cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
+        cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        continue
+
+    frame = cv2.resize(frame, (960, 540))
+    cv2.imshow('🔍 Cargo Monitoring', frame)
+
+    current_time = time.time()
+    if current_time - last_capture_time >= capture_interval:
+        (h, w) = frame.shape[:2]
+        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
+        net.setInput(blob)
+        detections = net.forward()
+
+        found_human = False
+        for i in range(detections.shape[2]):
+            confidence = detections[0, 0, i, 2]
+            if confidence > 0.05:
+                idx = int(detections[0, 0, i, 1])
+                if CLASSES[idx] == "person":
+                    found_human = True
+                    box = detections[0, 0, i, 3:7] * [w, h, w, h]
+                    (startX, startY, endX, endY) = box.astype("int")
+                    if (endX - startX) > 50 and (endY - startY) > 50:
+                        cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
+                        label = f"Person: {confidence * 100:.2f}%"
+                        cv2.putText(frame, label, (startX, startY - 10),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        if found_human:
+            print(f"[✅] Human detected. Showing popup...")
+            threading.Thread(target=show_popup, args=(frame.copy(),), daemon=True).start()
+            img_counter += 1
+        else:
+            print("[ℹ️] No human detected.")
+
+        last_capture_time = current_time
+        del blob, detections
+        gc.collect()
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# --- Cleanup ---
+cam.release()
+cv2.destroyAllWindows()
