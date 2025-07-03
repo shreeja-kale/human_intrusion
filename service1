@@ -1,0 +1,16 @@
+[Unit]
+Description=Human Intrusion Detection on Boot
+After=network.target weston.service
+
+[Service]
+ExecStart=/usr/bin/python3 /home/root/human_detection_project/human_intrusion.py
+WorkingDirectory=/home/root/human_detection_project
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=root
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/0
+
+[Install]
+WantedBy=multi-user.target
