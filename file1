@@ -1,0 +1,7 @@
+import os
+
+if not os.path.exists("/root/human_detection_project/mobilenet_ssd/MobileNetSSD_deploy.prototxt"):
+    print("❌ prototxt not found")
+
+if not os.path.exists("/root/human_detection_project/mobilenet_ssd/MobileNetSSD_deploy.caffemodel"):
+    print("❌ caffemodel not found")
