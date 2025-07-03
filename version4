@@ -23,7 +23,7 @@ cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
 cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
 img_counter = 0
-capture_interval = 60  # seconds
+capture_interval = 20  # seconds
 last_capture_time = time.time()
 
 # --- Popup Button Area ---
