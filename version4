@@ -4,7 +4,7 @@ import time
 import gc
 import numpy as np
 
-# --- Paths and Setup ---
+# --- Setup paths ---
 output_folder = "/home/root/human_images/"
 os.makedirs(output_folder, exist_ok=True)
 
@@ -13,10 +13,9 @@ model_path = "mobilenet_ssd/MobileNetSSD_deploy.caffemodel"
 net = cv2.dnn.readNetFromCaffe(prototxt_path, model_path)
 
 CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
-           "bottle", "bus", "car", "cat", "chair",
-           "cow", "diningtable", "dog", "horse",
-           "motorbike", "person", "pottedplant", "sheep",
-           "sofa", "train", "tvmonitor"]
+           "bottle", "bus", "car", "cat", "chair", "cow",
+           "diningtable", "dog", "horse", "motorbike", "person",
+           "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
 
 # --- RTSP Camera ---
 RTSP_URL = "rtsp://vmukti:vmukti%23907@192.168.1.88/1"
@@ -27,7 +26,7 @@ img_counter = 0
 capture_interval = 60  # seconds
 last_capture_time = time.time()
 
-# --- Popup Button Tracking ---
+# --- Popup Button Area ---
 button_top_left = (100, 120)
 button_bottom_right = (300, 170)
 clicked_inside = False
@@ -38,11 +37,11 @@ def mouse_callback(event, x, y, flags, param):
         if button_top_left[0] <= x <= button_bottom_right[0] and button_top_left[1] <= y <= button_bottom_right[1]:
             clicked_inside = True
 
-# --- Main Loop ---
+# --- Main Detection Loop ---
 while True:
     ret, frame = cam.read()
     if not ret or frame is None:
-        print("[⚠️] Frame not received. Reconnecting...")
+        print("[⚠️] Failed to grab frame, reconnecting...")
         cam.release()
         time.sleep(2)
         cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
@@ -50,7 +49,7 @@ while True:
         continue
 
     frame = cv2.resize(frame, (960, 540))
-    cv2.imshow('📷 Cargo Monitoring', frame)
+    cv2.imshow("📷 Cargo Monitoring", frame)
 
     current_time = time.time()
     if current_time - last_capture_time >= capture_interval:
@@ -78,9 +77,9 @@ while True:
             img_name = f"human_capture_{img_counter}.jpg"
             save_path = os.path.join(output_folder, img_name)
             cv2.imwrite(save_path, frame)
-            print(f"[🚨] Human detected! Waiting for click to show image...")
+            print(f"[🚨] Human detected. Image saved: {save_path}")
 
-            # --- Fake Popup with Show Button ---
+            # --- Popup: Human Detected with Show Button ---
             popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
             cv2.putText(popup_img, "Human Detected!", (80, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
             cv2.rectangle(popup_img, button_top_left, button_bottom_right, (0, 255, 0), -1)
@@ -91,8 +90,8 @@ while True:
             cv2.namedWindow("ALERT")
             cv2.setMouseCallback("ALERT", mouse_callback)
 
-            start_time_popup = time.time()
-            while time.time() - start_time_popup < 10:
+            popup_start = time.time()
+            while time.time() - popup_start < 10:
                 cv2.imshow("ALERT", popup_img)
                 if clicked_inside:
                     cv2.destroyWindow("ALERT")
@@ -101,7 +100,6 @@ while True:
                     cv2.resizeWindow("HUMAN CAPTURE", 960, 540)
                     cv2.imshow("HUMAN CAPTURE", full_img)
 
-                    # 30 sec loop with safe exit
                     show_start = time.time()
                     while time.time() - show_start < 30:
                         if cv2.getWindowProperty("HUMAN CAPTURE", cv2.WND_PROP_VISIBLE) < 1:
@@ -122,8 +120,9 @@ while True:
         del blob, detections
         gc.collect()
 
+    # Exit main loop on key 'q'
     if cv2.waitKey(1) & 0xFF == ord('q'):
-        print("Exiting Monitoring Loop")
+        print("Exiting monitoring loop.")
         break
 
 cam.release()
