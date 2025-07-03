@@ -52,7 +52,7 @@ while True:
         continue
 
     frame = cv2.resize(frame, (960, 540))
-    cv2.imshow("📷 Cargo Monitoring", frame)
+  #  cv2.imshow("📷 Cargo Monitoring", frame)
 
     current_time = time.time()
     if current_time - last_capture_time >= capture_interval:
@@ -95,7 +95,7 @@ while True:
             popup_start = time.time()
             while time.time() - popup_start < 10:
                 if cv2.getWindowProperty("ALERT", cv2.WND_PROP_VISIBLE) < 1:
-                    break  # Alert window closed manually
+                    break
                 cv2.imshow("ALERT", popup_img)
                 if clicked_inside:
                     safe_destroy("ALERT")
@@ -119,6 +119,8 @@ while True:
 
             safe_destroy("ALERT")
             img_counter += 1
+        else:
+            print("[ℹ️] No human detected.")
 
         last_capture_time = current_time
         del blob, detections
