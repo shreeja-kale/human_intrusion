@@ -1,7 +1,32 @@
-import os
+#!/bin/bash
 
-if not os.path.exists("/root/human_detection_project/mobilenet_ssd/MobileNetSSD_deploy.prototxt"):
-    print("❌ prototxt not found")
+echo "=== Starting Human Detection Script ===" >> /root/human_log.txt
 
-if not os.path.exists("/root/human_detection_project/mobilenet_ssd/MobileNetSSD_deploy.caffemodel"):
-    print("❌ caffemodel not found")
+# Set environment
+export QT_QPA_PLATFORM=wayland
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/run
+export WAYLAND_DISPLAY=wayland-0
+
+# Wait for Weston and socket
+tries=0
+while [ ! -S /run/wayland-0 ] && [ "$tries" -lt 30 ]; do
+    echo "[WAIT] Waiting for Weston... try $tries" >> /root/human_log.txt
+    sleep 2
+    tries=$((tries + 1))
+done
+
+if [ ! -S /run/wayland-0 ]; then
+    echo "[ERROR] Weston not ready after 30 tries. Exiting." >> /root/human_log.txt
+    exit 1
+fi
+
+echo "[OK] Weston is ready. Launching GUI..." >> /root/human_log.txt
+
+# Allow GUI access
+/usr/bin/xhost +local: >> /root/human_log.txt 2>&1
+
+# Launch your app
+/usr/bin/python3 /root/human_detection_project/human_intrusion.py >> /root/human_log.txt 2>&1
+
+echo "[DONE] Script finished running." >> /root/human_log.txt
