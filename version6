@@ -9,7 +9,6 @@ import threading
 output_folder = "/home/root/human_images/"
 os.makedirs(output_folder, exist_ok=True)
 
-# --- Load Model ---
 prototxt_path = "mobilenet_ssd/MobileNetSSD_deploy.prototxt"
 model_path = "mobilenet_ssd/MobileNetSSD_deploy.caffemodel"
 net = cv2.dnn.readNetFromCaffe(prototxt_path, model_path)
@@ -19,7 +18,6 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
            "diningtable", "dog", "horse", "motorbike", "person",
            "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
 
-# --- Camera ---
 RTSP_URL = "rtsp://vmukti:vmukti%23907@192.168.1.88/1"
 cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
 cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -32,46 +30,44 @@ button_top_left = (100, 120)
 button_bottom_right = (300, 170)
 clicked_inside = False
 
+def mouse_callback(event, x, y, flags, param):
+    global clicked_inside
+    if event == cv2.EVENT_LBUTTONDOWN:
+        if button_top_left[0] <= x <= button_bottom_right[0] and button_top_left[1] <= y <= button_bottom_right[1]:
+            clicked_inside = True
+
+def safe_destroy(window_name):
+    if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1:
+        cv2.destroyWindow(window_name)
 
 def sharpness_score(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     lap = cv2.Laplacian(gray, cv2.CV_64F)
     return lap.var()
 
-
 def color_variance(img):
     stddev = cv2.meanStdDev(img)[1]
     return np.mean(stddev)
 
-
 def show_camera_covered_popup():
-    popup = 255 * np.ones((200, 400, 3), dtype=np.uint8)
-    cv2.putText(popup, "Camera May Be Covered!", (30, 100),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-    cv2.imshow("Camera Covered Alert", popup)
-    cv2.waitKey(5000)
-    cv2.destroyWindow("Camera Covered Alert")
+    popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
+    cv2.putText(popup_img, "Camera May Be Covered!", (30, 100),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+    cv2.namedWindow("CAMERA COVER ALERT")
+    start = time.time()
+    while time.time() - start < 5:
+        if cv2.getWindowProperty("CAMERA COVER ALERT", cv2.WND_PROP_VISIBLE) < 1:
+            break
+        cv2.imshow("CAMERA COVER ALERT", popup_img)
+        if cv2.waitKey(100) & 0xFF == ord('q'):
+            break
+    safe_destroy("CAMERA COVER ALERT")
 
-
-def show_human_alert_popup(person_count, image_path):
-    popup = 255 * np.ones((200, 400, 3), dtype=np.uint8)
-    cv2.putText(popup, f"Detected: {person_count} person(s)", (40, 70),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-    cv2.imshow("Human Detected Alert", popup)
-    cv2.waitKey(5000)
-    cv2.destroyWindow("Human Detected Alert")
-
-    img = cv2.imread(image_path)
-    cv2.imshow("Captured Human", img)
-    cv2.waitKey(5000)
-    cv2.destroyWindow("Captured Human")
-
-
-# --- Main Loop ---
+# --- Main Detection Loop ---
 while True:
     ret, frame = cam.read()
     if not ret or frame is None:
-        print("[⚠️] Frame grab failed. Reconnecting...")
+        print("[⚠️] Frame grab failed, retrying...")
         cam.release()
         time.sleep(2)
         cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
@@ -80,12 +76,11 @@ while True:
 
     frame = cv2.resize(frame, (960, 540))
 
-    # --- Camera Covered Check ---
+    # --- Check camera cover ---
     sharp = sharpness_score(frame)
     color_std = color_variance(frame)
-
     if sharp < 90 and color_std < 90:
-        print("[🚨] Camera may be covered.")
+        print("[🚨] Camera may be covered. Sharpness:", sharp, "Color StdDev:", color_std)
         threading.Thread(target=show_camera_covered_popup, daemon=True).start()
 
     current_time = time.time()
@@ -97,6 +92,7 @@ while True:
 
         boxes = []
         confidences = []
+        person_count = 0
 
         for i in range(detections.shape[2]):
             confidence = detections[0, 0, i, 2]
@@ -131,18 +127,49 @@ while True:
             cv2.imwrite(save_path, frame)
             print(f"[🚨] Human detected. Count: {person_count}. Saved: {save_path}")
 
-            threading.Thread(target=show_human_alert_popup,
-                             args=(person_count, save_path), daemon=True).start()
-            img_counter += 1
-        else:
-            print("[ℹ️] No human detected.")
+            popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
+            cv2.putText(popup_img, f"Detected: {person_count} human(s)", (60, 70),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+            cv2.rectangle(popup_img, button_top_left, button_bottom_right, (0, 255, 0), -1)
+            cv2.putText(popup_img, "SHOW", (button_top_left[0] + 50, button_top_left[1] + 35),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
 
-        last_capture_time = current_time
+            clicked_inside = False
+            cv2.namedWindow("ALERT")
+            cv2.setMouseCallback("ALERT", mouse_callback)
+
+            popup_start = time.time()
+            while time.time() - popup_start < 10:
+                if cv2.getWindowProperty("ALERT", cv2.WND_PROP_VISIBLE) < 1:
+                    break
+                cv2.imshow("ALERT", popup_img)
+                if clicked_inside:
+                    safe_destroy("ALERT")
+                    full_img = cv2.imread(save_path)
+                    cv2.namedWindow("HUMAN CAPTURE", cv2.WINDOW_NORMAL)
+                    cv2.resizeWindow("HUMAN CAPTURE", 960, 540)
+                    cv2.imshow("HUMAN CAPTURE", full_img)
+
+                    show_start = time.time()
+                    while time.time() - show_start < 10:
+                        if cv2.getWindowProperty("HUMAN CAPTURE", cv2.WND_PROP_VISIBLE) < 1:
+                            break
+                        if cv2.waitKey(100) & 0xFF == ord('q'):
+                            break
+                    safe_destroy("HUMAN CAPTURE")
+                    break
+
+                if cv2.waitKey(50) & 0xFF == ord('q'):
+                    break
+
+            safe_destroy("ALERT")
+            img_counter += 1
         del blob, detections
+        last_capture_time = current_time
         gc.collect()
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
-        print("👋 Exiting.")
+        print("👋 Exiting main loop.")
         break
 
 cam.release()
