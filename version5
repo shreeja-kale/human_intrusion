@@ -1,0 +1,132 @@
+import cv2
+import os
+import time
+import gc
+import numpy as np
+
+# --- Setup paths ---
+output_folder = "/home/root/human_images/"
+os.makedirs(output_folder, exist_ok=True)
+
+prototxt_path = "mobilenet_ssd/MobileNetSSD_deploy.prototxt"
+model_path = "mobilenet_ssd/MobileNetSSD_deploy.caffemodel"
+net = cv2.dnn.readNetFromCaffe(prototxt_path, model_path)
+
+CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
+           "bottle", "bus", "car", "cat", "chair", "cow",
+           "diningtable", "dog", "horse", "motorbike", "person",
+           "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+
+# --- RTSP Camera ---
+RTSP_URL = "rtsp://vmukti:vmukti%23907@192.168.1.88/1"
+cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
+cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+img_counter = 0
+capture_interval = 30  # seconds
+last_capture_time = time.time()
+
+button_top_left = (100, 120)
+button_bottom_right = (300, 170)
+clicked_inside = False
+
+def mouse_callback(event, x, y, flags, param):
+    global clicked_inside
+    if event == cv2.EVENT_LBUTTONDOWN:
+        if button_top_left[0] <= x <= button_bottom_right[0] and button_top_left[1] <= y <= button_bottom_right[1]:
+            clicked_inside = True
+
+def safe_destroy(window_name):
+    if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1:
+        cv2.destroyWindow(window_name)
+
+# --- Main Detection Loop ---
+while True:
+    ret, frame = cam.read()
+    if not ret or frame is None:
+        print("[⚠️] Frame grab failed, retrying...")
+        cam.release()
+        time.sleep(2)
+        cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
+        cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        continue
+
+    frame = cv2.resize(frame, (960, 540))
+#    cv2.imshow("📷 Cargo Monitoring", frame)
+
+    current_time = time.time()
+    if current_time - last_capture_time >= capture_interval:
+        (h, w) = frame.shape[:2]
+        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
+        net.setInput(blob)
+        detections = net.forward()
+
+        found_human = False
+        for i in range(detections.shape[2]):
+            confidence = detections[0, 0, i, 2]
+            if confidence > 0.05:
+                idx = int(detections[0, 0, i, 1])
+                if CLASSES[idx] == "person":
+                    found_human = True
+                    box = detections[0, 0, i, 3:7] * [w, h, w, h]
+                    (startX, startY, endX, endY) = box.astype("int")
+                    if (endX - startX) > 50 and (endY - startY) > 50:
+                        cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
+                        label = f"Person: {confidence * 100:.2f}%"
+                        cv2.putText(frame, label, (startX, startY - 10),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        if found_human:
+            img_name = f"human_capture_{img_counter}.jpg"
+            save_path = os.path.join(output_folder, img_name)
+            cv2.imwrite(save_path, frame)
+            print(f"[🚨] Human detected. Saved: {save_path}")
+
+            popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
+            cv2.putText(popup_img, "Human Detected!", (80, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+            cv2.rectangle(popup_img, button_top_left, button_bottom_right, (0, 255, 0), -1)
+            cv2.putText(popup_img, "SHOW", (button_top_left[0] + 50, button_top_left[1] + 35),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
+
+            clicked_inside = False
+            cv2.namedWindow("ALERT")
+            cv2.setMouseCallback("ALERT", mouse_callback)
+
+            popup_start = time.time()
+            while time.time() - popup_start < 10:
+                if cv2.getWindowProperty("ALERT", cv2.WND_PROP_VISIBLE) < 1:
+                    break  # Alert window closed manually
+                cv2.imshow("ALERT", popup_img)
+                if clicked_inside:
+                    safe_destroy("ALERT")
+                    full_img = cv2.imread(save_path)
+                    cv2.namedWindow("HUMAN CAPTURE", cv2.WINDOW_NORMAL)
+                    cv2.resizeWindow("HUMAN CAPTURE", 960, 540)
+                    cv2.imshow("HUMAN CAPTURE", full_img)
+
+                    show_start = time.time()
+                    while time.time() - show_start < 30:
+                        if cv2.getWindowProperty("HUMAN CAPTURE", cv2.WND_PROP_VISIBLE) < 1:
+                            break
+                        if cv2.waitKey(100) & 0xFF == ord('q'):
+                            break
+
+                    safe_destroy("HUMAN CAPTURE")
+                    break
+
+                if cv2.waitKey(50) & 0xFF == ord('q'):
+                    break
+
+            safe_destroy("ALERT")
+            img_counter += 1
+
+        last_capture_time = current_time
+        del blob, detections
+        gc.collect()
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        print("👋 Exiting main loop.")
+        break
+
+cam.release()
+cv2.destroyAllWindows()
