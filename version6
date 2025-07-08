@@ -3,6 +3,7 @@ import os
 import time
 import gc
 import numpy as np
+import threading
 
 # --- Setup paths ---
 output_folder = "/home/root/human_images/"
@@ -17,7 +18,6 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
            "diningtable", "dog", "horse", "motorbike", "person",
            "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
 
-# --- RTSP Camera ---
 RTSP_URL = "rtsp://vmukti:vmukti%23907@192.168.1.88/1"
 cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
 cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -29,6 +29,8 @@ last_capture_time = time.time()
 button_top_left = (100, 120)
 button_bottom_right = (300, 170)
 clicked_inside = False
+camera_covered_alert_shown = False  # flag to avoid repeated alerts
+
 
 def mouse_callback(event, x, y, flags, param):
     global clicked_inside
@@ -36,9 +38,38 @@ def mouse_callback(event, x, y, flags, param):
         if button_top_left[0] <= x <= button_bottom_right[0] and button_top_left[1] <= y <= button_bottom_right[1]:
             clicked_inside = True
 
+
 def safe_destroy(window_name):
     if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1:
         cv2.destroyWindow(window_name)
+
+
+def sharpness_score(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    lap = cv2.Laplacian(gray, cv2.CV_64F)
+    return lap.var()
+
+
+def color_variance(img):
+    stddev = cv2.meanStdDev(img)[1]
+    return np.mean(stddev)
+
+
+def show_camera_covered_popup():
+    popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
+    cv2.putText(popup_img, "Camera May Be Covered!", (30, 100),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
+    cv2.namedWindow("CAMERA COVER ALERT")
+    start = time.time()
+    while time.time() - start < 5:
+        if cv2.getWindowProperty("CAMERA COVER ALERT", cv2.WND_PROP_VISIBLE) < 1:
+            break
+        cv2.imshow("CAMERA COVER ALERT", popup_img)
+        if cv2.waitKey(100) & 0xFF == ord('q'):
+            break
+    safe_destroy("CAMERA COVER ALERT")
+
 
 # --- Main Detection Loop ---
 while True:
@@ -52,7 +83,19 @@ while True:
         continue
 
     frame = cv2.resize(frame, (960, 540))
-    # cv2.imshow("📷 Cargo Monitoring", frame)
+
+    # --- Check camera cover ---
+    sharp = sharpness_score(frame)
+    color_std = color_variance(frame)
+
+    if sharp < 90 and color_std < 90:
+        if not camera_covered_alert_shown:
+            print("Camera may be covered.")
+            threading.Thread(target=show_camera_covered_popup, daemon=True).start()
+            camera_covered_alert_shown = True
+        continue
+    else:
+        camera_covered_alert_shown = False
 
     current_time = time.time()
     if current_time - last_capture_time >= capture_interval:
@@ -67,12 +110,12 @@ while True:
 
         for i in range(detections.shape[2]):
             confidence = detections[0, 0, i, 2]
-            if confidence > 0.4:  # Increased threshold
+            if confidence > 0.4:
                 idx = int(detections[0, 0, i, 1])
                 if CLASSES[idx] == "person":
                     box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
                     (startX, startY, endX, endY) = box.astype("int")
-                    if (endX - startX) > 50 and (endY - startY) > 50:  # Box size filter
+                    if (endX - startX) > 50 and (endY - startY) > 50:
                         boxes.append([startX, startY, endX, endY])
                         confidences.append(float(confidence))
 
@@ -137,7 +180,6 @@ while True:
             safe_destroy("ALERT")
             img_counter += 1
             last_capture_time = current_time
-
         else:
             print("[ℹ️] No human detected.")
             last_capture_time = current_time
