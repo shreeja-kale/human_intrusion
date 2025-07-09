@@ -86,7 +86,7 @@ while True:
 
             popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
             cv2.putText(popup_img, "Human Detected!", (80, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
-            cv2.putText(popup_img, f"Count: {person_count}", (80, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+            cv2.putText(popup_img, f"Count: {person_count}", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
             cv2.rectangle(popup_img, button_top_left, button_bottom_right, (0, 255, 0), -1)
             cv2.putText(popup_img, "SHOW", (button_top_left[0] + 50, button_top_left[1] + 35),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
@@ -120,10 +120,12 @@ while True:
                 if cv2.waitKey(50) & 0xFF == ord('q'):
                     break
 
-            # 🔴 Force close popup after 10 seconds
-            safe_destroy("ALERT")
+            # 🔴 Force close the popup if time is up and not clicked
+            cv2.destroyWindow("ALERT")
+            cv2.waitKey(1)
+
             img_counter += 1
-            last_capture_time = current_time  # ✅ update here
+            last_capture_time = current_time
 
         else:
             print("[ℹ️] No human detected.")
