@@ -113,6 +113,7 @@ while True:
                             break
 
                     safe_destroy("HUMAN CAPTURE")
+                    clicked_inside = False
                     break
 
                 if cv2.waitKey(50) & 0xFF == ord('q'):
@@ -124,6 +125,7 @@ while True:
 
         else:
             print("[ℹ️] No human detected.")
+            last_capture_time = current_time
 
         del blob, detections
         gc.collect()
