@@ -62,14 +62,15 @@ while True:
         detections = net.forward()
 
         found_human = False
-        person_count = 0  # Added line
+        person_count = 0
+
         for i in range(detections.shape[2]):
             confidence = detections[0, 0, i, 2]
             if confidence > 0.05:
                 idx = int(detections[0, 0, i, 1])
                 if CLASSES[idx] == "person":
-                    person_count += 1  # Count each person
                     found_human = True
+                    person_count += 1
                     box = detections[0, 0, i, 3:7] * [w, h, w, h]
                     (startX, startY, endX, endY) = box.astype("int")
                     if (endX - startX) > 50 and (endY - startY) > 50:
@@ -82,12 +83,11 @@ while True:
             img_name = f"human_capture_{img_counter}.jpg"
             save_path = os.path.join(output_folder, img_name)
             cv2.imwrite(save_path, frame)
-
-            # Changed to print count
-            print(f"[🚨] Human detected. Count: {person_count}. Saved: {save_path}")
+            print(f"[🚨] Human detected. Saved: {save_path}")
 
             popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
-            cv2.putText(popup_img, "Human Detected!", (80, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+            cv2.putText(popup_img, "Human Detected!", (80, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+            cv2.putText(popup_img, f"Count: {person_count}", (80, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
             cv2.rectangle(popup_img, button_top_left, button_bottom_right, (0, 255, 0), -1)
             cv2.putText(popup_img, "SHOW", (button_top_left[0] + 50, button_top_left[1] + 35),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
