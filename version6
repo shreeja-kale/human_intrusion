@@ -17,13 +17,14 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
            "diningtable", "dog", "horse", "motorbike", "person",
            "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
 
+# --- RTSP Camera ---
 RTSP_URL = "rtsp://vmukti:vmukti%23907@192.168.1.88/1"
 cam = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
 cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
 img_counter = 0
 capture_interval = 30  # seconds
-last_capture_time = 0  # Start with 0 to allow detection immediately
+last_capture_time = 0
 
 button_top_left = (100, 120)
 button_bottom_right = (300, 170)
@@ -39,6 +40,7 @@ def safe_destroy(window_name):
     if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1:
         cv2.destroyWindow(window_name)
 
+# --- Main Detection Loop ---
 while True:
     ret, frame = cam.read()
     if not ret or frame is None:
@@ -50,8 +52,8 @@ while True:
         continue
 
     frame = cv2.resize(frame, (960, 540))
-
     current_time = time.time()
+
     if current_time - last_capture_time >= capture_interval:
         (h, w) = frame.shape[:2]
         blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
@@ -82,6 +84,7 @@ while True:
             cv2.imwrite(save_path, frame)
             print(f"[🚨] Human detected. Count: {person_count}. Saved: {save_path}")
 
+            # Show popup
             popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
             cv2.putText(popup_img, "Human Detected!", (80, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
             cv2.putText(popup_img, f"Count: {person_count}", (80, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
@@ -113,7 +116,6 @@ while True:
                             break
 
                     safe_destroy("HUMAN CAPTURE")
-                    clicked_inside = False
                     break
 
                 if cv2.waitKey(50) & 0xFF == ord('q'):
@@ -121,11 +123,11 @@ while True:
 
             safe_destroy("ALERT")
             img_counter += 1
-            last_capture_time = current_time  # ✅ only update on human detected
+            last_capture_time = current_time  # update only if human found
 
         else:
             print("[ℹ️] No human detected.")
-            last_capture_time = current_time
+            last_capture_time = current_time  # update even if no human
 
         del blob, detections
         gc.collect()
