@@ -41,13 +41,11 @@ def safe_destroy(window_name):
     if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1:
         cv2.destroyWindow(window_name)
 
-# --- Sharpness check ---
 def calculate_sharpness(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     laplacian = cv2.Laplacian(gray, cv2.CV_64F)
     return laplacian.var()
 
-# --- Color variance check ---
 def calculate_color_variance(image):
     return np.std(image)
 
@@ -65,32 +63,31 @@ while True:
     frame = cv2.resize(frame, (960, 540))
 
     # --- Check for camera cover ---
-    # --- Check for camera cover ---
-sharpness = calculate_sharpness(frame)
-color_variance = calculate_color_variance(frame)
+    sharpness = calculate_sharpness(frame)
+    color_variance = calculate_color_variance(frame)
 
-if sharpness < 25 and color_variance < 10:
-    if not camera_covered_alert_shown:
-        print("[🚨] Camera may be covered! (Low sharpness & low variance)")
-        camera_covered_alert_shown = True
-else:
-    if camera_covered_alert_shown:  # only trigger once after being covered
-        print("[✅] Camera not covered.")
-        # Optional: popup to notify
-        popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
-        cv2.putText(popup_img, "Camera Working", (80, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 128, 0), 2)
-        cv2.namedWindow("CAMERA STATUS")
-        popup_start = time.time()
-        while time.time() - popup_start < 3:
-            if cv2.getWindowProperty("CAMERA STATUS", cv2.WND_PROP_VISIBLE) < 1:
-                break
-            cv2.imshow("CAMERA STATUS", popup_img)
-            if cv2.waitKey(50) & 0xFF == ord('q'):
-                break
-        safe_destroy("CAMERA STATUS")
+    if sharpness < 25 and color_variance < 10:
+        if not camera_covered_alert_shown:
+            print("[🚨] Camera may be covered! (Low sharpness & variance)")
+            camera_covered_alert_shown = True
+    else:
+        if camera_covered_alert_shown:
+            print("[✅] Camera not covered.")
+            # Optional: popup to notify
+            popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
+            cv2.putText(popup_img, "Camera Working", (80, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 128, 0), 2)
+            cv2.namedWindow("CAMERA STATUS")
+            popup_start = time.time()
+            while time.time() - popup_start < 3:
+                if cv2.getWindowProperty("CAMERA STATUS", cv2.WND_PROP_VISIBLE) < 1:
+                    break
+                cv2.imshow("CAMERA STATUS", popup_img)
+                if cv2.waitKey(50) & 0xFF == ord('q'):
+                    break
+            safe_destroy("CAMERA STATUS")
+            camera_covered_alert_shown = False
 
-        camera_covered_alert_shown = False
-
+    # --- Detection every N seconds ---
     current_time = time.time()
     if current_time - last_capture_time >= capture_interval:
         (h, w) = frame.shape[:2]
