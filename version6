@@ -62,7 +62,7 @@ while True:
 
     frame = cv2.resize(frame, (960, 540))
 
-    # --- Check for camera cover ---
+    # --- Check if camera may be covered ---
     sharpness = calculate_sharpness(frame)
     color_variance = calculate_color_variance(frame)
 
@@ -73,7 +73,6 @@ while True:
     else:
         if camera_covered_alert_shown:
             print("[✅] Camera not covered.")
-            # Optional: popup to notify
             popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
             cv2.putText(popup_img, "Camera Working", (80, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 128, 0), 2)
             cv2.namedWindow("CAMERA STATUS")
@@ -87,83 +86,81 @@ while True:
             safe_destroy("CAMERA STATUS")
             camera_covered_alert_shown = False
 
-    # --- Detection every N seconds ---
-    current_time = time.time()
-    if current_time - last_capture_time >= capture_interval:
-        (h, w) = frame.shape[:2]
-        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
-        net.setInput(blob)
-        detections = net.forward()
+        current_time = time.time()
+        if current_time - last_capture_time >= capture_interval:
+            (h, w) = frame.shape[:2]
+            blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
+            net.setInput(blob)
+            detections = net.forward()
 
-        found_human = False
-        person_count = 0
+            found_human = False
+            person_count = 0
 
-        for i in range(detections.shape[2]):
-            confidence = detections[0, 0, i, 2]
-            if confidence > 0.4:  # more reliable
-                idx = int(detections[0, 0, i, 1])
-                if CLASSES[idx] == "person":
-                    person_count += 1
-                    found_human = True
-                    box = detections[0, 0, i, 3:7] * [w, h, w, h]
-                    (startX, startY, endX, endY) = box.astype("int")
-                    if (endX - startX) > 50 and (endY - startY) > 50:
-                        cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
-                        label = f"Person: {confidence * 100:.2f}%"
-                        cv2.putText(frame, label, (startX, startY - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            for i in range(detections.shape[2]):
+                confidence = detections[0, 0, i, 2]
+                if confidence > 0.4:
+                    idx = int(detections[0, 0, i, 1])
+                    if CLASSES[idx] == "person":
+                        person_count += 1
+                        found_human = True
+                        box = detections[0, 0, i, 3:7] * [w, h, w, h]
+                        (startX, startY, endX, endY) = box.astype("int")
+                        if (endX - startX) > 50 and (endY - startY) > 50:
+                            cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
+                            label = f"Person: {confidence * 100:.2f}%"
+                            cv2.putText(frame, label, (startX, startY - 10),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        if found_human:
-            img_name = f"human_capture_{img_counter}.jpg"
-            save_path = os.path.join(output_folder, img_name)
-            cv2.imwrite(save_path, frame)
-            print(f"[🚨] Human detected. Count: {person_count}. Saved: {save_path}")
+            if found_human:
+                img_name = f"human_capture_{img_counter}.jpg"
+                save_path = os.path.join(output_folder, img_name)
+                cv2.imwrite(save_path, frame)
+                print(f"[🚨] Human detected. Count: {person_count}. Saved: {save_path}")
 
-            popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
-            cv2.putText(popup_img, f"Human Detected!", (80, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-            cv2.putText(popup_img, f"Count: {person_count}", (80, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
-            cv2.rectangle(popup_img, button_top_left, button_bottom_right, (0, 255, 0), -1)
-            cv2.putText(popup_img, "SHOW", (button_top_left[0] + 50, button_top_left[1] + 35),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
+                popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
+                cv2.putText(popup_img, f"Human Detected!", (80, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                cv2.putText(popup_img, f"Count: {person_count}", (80, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+                cv2.rectangle(popup_img, button_top_left, button_bottom_right, (0, 255, 0), -1)
+                cv2.putText(popup_img, "SHOW", (button_top_left[0] + 50, button_top_left[1] + 35),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
 
-            clicked_inside = False
-            cv2.namedWindow("ALERT")
-            cv2.setMouseCallback("ALERT", mouse_callback)
+                clicked_inside = False
+                cv2.namedWindow("ALERT")
+                cv2.setMouseCallback("ALERT", mouse_callback)
 
-            popup_start = time.time()
-            while time.time() - popup_start < 10:
-                if cv2.getWindowProperty("ALERT", cv2.WND_PROP_VISIBLE) < 1:
-                    break
-                cv2.imshow("ALERT", popup_img)
-                if clicked_inside:
-                    safe_destroy("ALERT")
-                    full_img = cv2.imread(save_path)
-                    cv2.namedWindow("HUMAN CAPTURE", cv2.WINDOW_NORMAL)
-                    cv2.resizeWindow("HUMAN CAPTURE", 960, 540)
-                    cv2.imshow("HUMAN CAPTURE", full_img)
+                popup_start = time.time()
+                while time.time() - popup_start < 10:
+                    if cv2.getWindowProperty("ALERT", cv2.WND_PROP_VISIBLE) < 1:
+                        break
+                    cv2.imshow("ALERT", popup_img)
+                    if clicked_inside:
+                        safe_destroy("ALERT")
+                        full_img = cv2.imread(save_path)
+                        cv2.namedWindow("HUMAN CAPTURE", cv2.WINDOW_NORMAL)
+                        cv2.resizeWindow("HUMAN CAPTURE", 960, 540)
+                        cv2.imshow("HUMAN CAPTURE", full_img)
 
-                    show_start = time.time()
-                    while time.time() - show_start < 10:
-                        if cv2.getWindowProperty("HUMAN CAPTURE", cv2.WND_PROP_VISIBLE) < 1:
-                            break
-                        if cv2.waitKey(100) & 0xFF == ord('q'):
-                            break
+                        show_start = time.time()
+                        while time.time() - show_start < 10:
+                            if cv2.getWindowProperty("HUMAN CAPTURE", cv2.WND_PROP_VISIBLE) < 1:
+                                break
+                            if cv2.waitKey(100) & 0xFF == ord('q'):
+                                break
+                        safe_destroy("HUMAN CAPTURE")
+                        break
 
-                    safe_destroy("HUMAN CAPTURE")
-                    break
+                    if cv2.waitKey(50) & 0xFF == ord('q'):
+                        break
 
-                if cv2.waitKey(50) & 0xFF == ord('q'):
-                    break
+                safe_destroy("ALERT")
+                img_counter += 1
 
-            safe_destroy("ALERT")
-            img_counter += 1
+            else:
+                print("[ℹ️] No human detected.")
 
-        else:
-            print("[ℹ️] No human detected.")
-        last_capture_time = current_time
-
-        del blob, detections
-        gc.collect()
+            last_capture_time = current_time
+            del blob, detections
+            gc.collect()
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         print("👋 Exiting main loop.")
