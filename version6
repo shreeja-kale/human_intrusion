@@ -63,29 +63,28 @@ while True:
     frame = cv2.resize(frame, (960, 540))
 
     # --- Check if camera may be covered ---
-    # --- Check if camera may be covered ---
-sharpness = calculate_sharpness(frame)
-color_variance = calculate_color_variance(frame)
+    sharpness = calculate_sharpness(frame)
+    color_variance = calculate_color_variance(frame)
 
-if sharpness < 25 and color_variance < 10:
-    if not camera_covered_alert_shown:
-        print("[🚨] Camera may be covered! (Low sharpness & variance)")
-        # Optional: show popup alert
-        popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
-        cv2.putText(popup_img, "Camera Covered!", (80, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
-        cv2.namedWindow("CAMERA ALERT")
-        popup_start = time.time()
-        while time.time() - popup_start < 3:
-            if cv2.getWindowProperty("CAMERA ALERT", cv2.WND_PROP_VISIBLE) < 1:
-                break
-            cv2.imshow("CAMERA ALERT", popup_img)
-            if cv2.waitKey(50) & 0xFF == ord('q'):
-                break
-        safe_destroy("CAMERA ALERT")
+    if sharpness < 25 and color_variance < 10:
+        if not camera_covered_alert_shown:
+            print("[🚨] Camera may be covered! (Low sharpness & variance)")
+            # Optional: show popup alert
+            popup_img = 255 * np.ones((200, 400, 3), dtype=np.uint8)
+            cv2.putText(popup_img, "Camera Covered!", (80, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+            cv2.namedWindow("CAMERA ALERT")
+            popup_start = time.time()
+            while time.time() - popup_start < 3:
+                if cv2.getWindowProperty("CAMERA ALERT", cv2.WND_PROP_VISIBLE) < 1:
+                    break
+                cv2.imshow("CAMERA ALERT", popup_img)
+                if cv2.waitKey(50) & 0xFF == ord('q'):
+                    break
+            safe_destroy("CAMERA ALERT")
 
-        camera_covered_alert_shown = True
-else:
-    camera_covered_alert_shown = False  # reset flag silently
+            camera_covered_alert_shown = True
+    else:
+        camera_covered_alert_shown = False  # reset flag silently
 
         current_time = time.time()
         if current_time - last_capture_time >= capture_interval:
