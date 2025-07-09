@@ -37,8 +37,11 @@ def mouse_callback(event, x, y, flags, param):
             clicked_inside = True
 
 def safe_destroy(window_name):
-    if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1:
-        cv2.destroyWindow(window_name)
+    try:
+        if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1:
+            cv2.destroyWindow(window_name)
+    except cv2.error as e:
+        print(f"[⚠️] Window destroy failed for {window_name}: {e}")
 
 # --- Main Detection Loop ---
 while True:
@@ -98,8 +101,13 @@ while True:
 
             popup_start = time.time()
             while time.time() - popup_start < 10:
-                if cv2.getWindowProperty("ALERT", cv2.WND_PROP_VISIBLE) < 1:
+                try:
+                    if cv2.getWindowProperty("ALERT", cv2.WND_PROP_VISIBLE) < 1:
+                        break
+                except cv2.error as e:
+                    print("[⚠️] ALERT window error:", e)
                     break
+
                 cv2.imshow("ALERT", popup_img)
                 if clicked_inside:
                     safe_destroy("ALERT")
@@ -110,7 +118,11 @@ while True:
 
                     show_start = time.time()
                     while time.time() - show_start < 10:
-                        if cv2.getWindowProperty("HUMAN CAPTURE", cv2.WND_PROP_VISIBLE) < 1:
+                        try:
+                            if cv2.getWindowProperty("HUMAN CAPTURE", cv2.WND_PROP_VISIBLE) < 1:
+                                break
+                        except cv2.error as e:
+                            print("[⚠️] HUMAN CAPTURE window error:", e)
                             break
                         if cv2.waitKey(100) & 0xFF == ord('q'):
                             break
@@ -123,11 +135,11 @@ while True:
 
             safe_destroy("ALERT")
             img_counter += 1
-            last_capture_time = current_time  # update only if human found
+            last_capture_time = current_time
 
         else:
             print("[ℹ️] No human detected.")
-            last_capture_time = current_time  # update even if no human
+            last_capture_time = current_time
 
         del blob, detections
         gc.collect()
