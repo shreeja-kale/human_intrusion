@@ -96,15 +96,18 @@ while True:
 
             clicked_inside = False
             cv2.namedWindow("ALERT")
-            cv2.setMouseCallback("ALERT", mouse_callback)
 
-            # Center the ALERT popup
-            screen_width = 1920
+            # --- ✅ Centering the ALERT window ---
+            screen_width = 1920   # Set your screen resolution here
             screen_height = 1080
-            popup_height, popup_width = popup_img.shape[:2]
-            popup_x = (screen_width - popup_width) // 2
-            popup_y = (screen_height - popup_height) // 2
-            cv2.moveWindow("ALERT", popup_x, popup_y)
+            popup_width = 400
+            popup_height = 200
+            center_x = (screen_width - popup_width) // 2
+            center_y = (screen_height - popup_height) // 2
+            cv2.moveWindow("ALERT", center_x, center_y)
+            # --------------------------------------
+
+            cv2.setMouseCallback("ALERT", mouse_callback)
 
             popup_start = time.time()
             while time.time() - popup_start < 10:
@@ -120,12 +123,6 @@ while True:
                     full_img = cv2.imread(save_path)
                     cv2.namedWindow("HUMAN CAPTURE", cv2.WINDOW_NORMAL)
                     cv2.resizeWindow("HUMAN CAPTURE", 960, 540)
-
-                    # Center HUMAN CAPTURE
-                    capture_x = (screen_width - 960) // 2
-                    capture_y = (screen_height - 540) // 2
-                    cv2.moveWindow("HUMAN CAPTURE", capture_x, capture_y)
-
                     cv2.imshow("HUMAN CAPTURE", full_img)
 
                     show_start = time.time()
