@@ -26,7 +26,7 @@ img_counter = 0
 capture_interval = 30  # seconds
 last_capture_time = 0
 
-# Initialize button region
+# Button coordinates
 button_top_left = (140, 140)
 button_bottom_right = (260, 180)
 clicked_inside = False
@@ -104,17 +104,15 @@ while True:
 
             clicked_inside = False
 
-            # --- Display the ALERT popup centered on screen ---
-            screen_width = 1920
-            screen_height = 1200
-            center_x = (screen_width - popup_width) // 2
-            center_y = (screen_height - popup_height) // 2
-
+            # --- Display the ALERT popup ---
             cv2.namedWindow("ALERT", cv2.WINDOW_NORMAL)
             cv2.resizeWindow("ALERT", popup_width, popup_height)
             cv2.imshow("ALERT", popup_img)
-            cv2.waitKey(10)  # Required to let window manager map window
-            cv2.moveWindow("ALERT", center_x, center_y)
+            cv2.waitKey(100)
+
+            # 💡 Force move to screen center using xdotool (on 1920×1200 screen)
+            os.system("xdotool search --name ALERT windowmove 760 500")
+
             cv2.setMouseCallback("ALERT", mouse_callback)
 
             popup_start = time.time()
