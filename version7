@@ -3,7 +3,6 @@ import os
 import time
 import gc
 import numpy as np
-import tkinter as tk  # ✅ Added for dynamic screen resolution
 
 # --- Setup paths ---
 output_folder = "/home/root/human_images/"
@@ -43,11 +42,6 @@ def safe_destroy(window_name):
             cv2.destroyWindow(window_name)
     except:
         pass
-
-def get_screen_size():
-    root = tk.Tk()
-    root.withdraw()
-    return root.winfo_screenwidth(), root.winfo_screenheight()
 
 # --- Main Detection Loop ---
 while True:
@@ -102,16 +96,19 @@ while True:
 
             clicked_inside = False
 
-            # --- Centering ALERT using dynamic screen size ---
-            screen_width, screen_height = get_screen_size()
-            popup_width, popup_height = 400, 200
+            # --- Create and show the ALERT popup ---
+            cv2.namedWindow("ALERT", cv2.WINDOW_NORMAL)
+            cv2.imshow("ALERT", popup_img)  # Must be shown before move
+
+            # --- ✅ Center the ALERT window ---
+            screen_width = 1920   # Change based on your display
+            screen_height = 1080
+            popup_width = 400
+            popup_height = 200
             center_x = (screen_width - popup_width) // 2
             center_y = (screen_height - popup_height) // 2
-
-            cv2.namedWindow("ALERT", cv2.WINDOW_NORMAL)
-            cv2.imshow("ALERT", popup_img)
             cv2.moveWindow("ALERT", center_x, center_y)
-            # --------------------------------------------------
+            # -----------------------------------
 
             cv2.setMouseCallback("ALERT", mouse_callback)
 
