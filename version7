@@ -68,7 +68,7 @@ while True:
 
         for i in range(detections.shape[2]):
             confidence = detections[0, 0, i, 2]
-            if confidence > 0.05:
+            if confidence > 0.04:
                 idx = int(detections[0, 0, i, 1])
                 if CLASSES[idx] == "person":
                     found_human = True
@@ -95,17 +95,20 @@ while True:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
 
             clicked_inside = False
-            cv2.namedWindow("ALERT")
 
-            # --- ✅ Centering the ALERT window ---
-            screen_width = 1920   # Set your screen resolution here
+            # --- Create and show the ALERT popup ---
+            cv2.namedWindow("ALERT", cv2.WINDOW_NORMAL)
+            cv2.imshow("ALERT", popup_img)  # Must be shown before move
+
+            # --- ✅ Center the ALERT window ---
+            screen_width = 1920   # Change based on your display
             screen_height = 1080
             popup_width = 400
             popup_height = 200
             center_x = (screen_width - popup_width) // 2
             center_y = (screen_height - popup_height) // 2
             cv2.moveWindow("ALERT", center_x, center_y)
-            # --------------------------------------
+            # -----------------------------------
 
             cv2.setMouseCallback("ALERT", mouse_callback)
 
