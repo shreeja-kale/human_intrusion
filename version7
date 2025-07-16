@@ -30,18 +30,10 @@ button_top_left = (100, 120)
 button_bottom_right = (300, 170)
 clicked_inside = False
 
-# Screen and popup sizes
-screen_width, screen_height = 1920, 1200
-popup_width, popup_height = 400, 200
-popup_start_x = (screen_width - popup_width) // 2
-popup_start_y = (screen_height - popup_height) // 2
-
 def mouse_callback(event, x, y, flags, param):
     global clicked_inside
-    rel_x = x - popup_start_x
-    rel_y = y - popup_start_y
     if event == cv2.EVENT_LBUTTONDOWN:
-        if button_top_left[0] <= rel_x <= button_bottom_right[0] and button_top_left[1] <= rel_y <= button_bottom_right[1]:
+        if button_top_left[0] <= x <= button_bottom_right[0] and button_top_left[1] <= y <= button_bottom_right[1]:
             clicked_inside = True
 
 def safe_destroy(window_name):
@@ -95,7 +87,8 @@ while True:
             cv2.imwrite(save_path, frame)
             print(f"[🚨] Human detected. Count: {person_count}. Saved: {save_path}")
 
-            # Create popup
+            popup_width = 400
+            popup_height = 200
             popup_img = 255 * np.ones((popup_height, popup_width, 3), dtype=np.uint8)
             cv2.putText(popup_img, "Human Detected!", (80, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
             cv2.putText(popup_img, f"Count: {person_count}", (80, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
@@ -103,13 +96,22 @@ while True:
             cv2.putText(popup_img, "SHOW", (button_top_left[0] + 50, button_top_left[1] + 35),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
 
-            # Create full canvas and paste popup into center
-            canvas = 255 * np.ones((screen_height, screen_width, 3), dtype=np.uint8)
-            canvas[popup_start_y:popup_start_y + popup_height, popup_start_x:popup_start_x + popup_width] = popup_img
-
             clicked_inside = False
+
+            # --- Create and show the ALERT popup ---
             cv2.namedWindow("ALERT", cv2.WINDOW_NORMAL)
-            cv2.imshow("ALERT", canvas)
+            cv2.resizeWindow("ALERT", popup_width, popup_height)
+            cv2.imshow("ALERT", popup_img)
+            cv2.waitKey(10)  # Let the window appear before moving
+
+            # --- Move it to center of 1920x1200 screen ---
+            screen_width = 1920
+            screen_height = 1200
+            center_x = (screen_width - popup_width) // 2
+            center_y = (screen_height - popup_height) // 2
+            cv2.moveWindow("ALERT", center_x, center_y)
+            # ------------------------------------------------
+
             cv2.setMouseCallback("ALERT", mouse_callback)
 
             popup_start = time.time()
@@ -117,7 +119,7 @@ while True:
                 try:
                     if cv2.getWindowProperty("ALERT", cv2.WND_PROP_VISIBLE) < 1:
                         break
-                    cv2.imshow("ALERT", canvas)
+                    cv2.imshow("ALERT", popup_img)
                 except:
                     break
 
